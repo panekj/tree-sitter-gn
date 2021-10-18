@@ -1,0 +1,1 @@
+au BufRead grammar.js ++nested setl makeprg=tree-sitter\ generate
