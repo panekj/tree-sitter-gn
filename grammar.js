@@ -1,7 +1,11 @@
 // grammar.js - grammar file for GN
 
+const IDENTIFIER_REGEX = /[a-zA-Z_][a-zA-Z_0-9]*/;
+const INTEGER_REGEX = /0|(-?[1-9][0-9]*)/;
+const HEX_REGEX = /0[xX][0-9a-fA-F][0-9a-fA-F]/;
+
 // Helper function for binary expressions
-function binaryExpr($, spec) {
+function binary_expr($, spec) {
     // All binary operators in GN are left-associative
     return prec.left(spec.prec, seq(
         field('lhs', $._expr),
@@ -13,7 +17,9 @@ function binaryExpr($, spec) {
 module.exports = grammar({
     name: 'gn',
 
-    extras: $ => [' ', '\t', '\r', '\n', $.comment ],
+    word: $ => $.identifier,
+
+    extras: $ => [ /[ \t\r\n]+/, $.comment ],
 
     rules: {
         source_file: $ => repeat($._statement),
@@ -23,107 +29,99 @@ module.exports = grammar({
             $.condition,
         ),
 
-        assignOp: $ => choice(
+        assign_op: $ => choice(
             '=',
             '+=',
             '-=',
         ),
-        _lValue: $ => choice(
+        _lvalue: $ => choice(
             $.identifier,
-            $.arrayAccess,
-            $.scopeAccess,
+            $.array_access,
+            $.scope_access,
         ),
         assignment: $ => seq(
-            field('target', $._lValue),
-            field('op', $.assignOp),
+            field('target', $._lvalue),
+            field('op', $.assign_op),
             field('expr', $._expr),
         ),
 
         call: $ => seq(
             field('target', $.identifier),
-            '(', field('arg_exprs', optional($._exprList)), ')',
+            '(', field('args', optional($._expr_list)), ')',
             field('block', optional($.block)),
         ),
 
-        arithmeticBinaryOp: $ => choice(
+        negation_unary_op: $ => '!',
+        unary_expr: $ => seq(
+            repeat($.negation_unary_op),
+            $._primary_expr,
+        ),
+
+        arithmetic_binary_op: $ => choice(
             '+',
             '-',
         ),
-        comparisonBinaryOp: $ => choice(
+        comparison_binary_op: $ => choice(
             '<',
             '<=',
             '>',
             '>=',
         ),
-        equivalenceBinaryOp: $ => choice(
+        equivalence_binary_op: $ => choice(
             '==',
             '!=',
         ),
-        logicalAndBinaryOp: $ => '&&',
-        logicalOrBinaryOp: $ => '||',
-        arithmeticBinaryExpr: $ => binaryExpr($, {prec: 5, op: $.arithmeticBinaryOp}),
-        comparisonBinaryExpr: $ => binaryExpr($, {prec: 4, op: $.comparisonBinaryOp}),
-        equivalenceBinaryExpr: $ => binaryExpr($, {prec: 3, op: $.equivalenceBinaryOp}),
-        logicalAndBinaryExpr: $ => binaryExpr($, {prec: 2, op: $.logicalAndBinaryOp}),
-        logicalOrBinaryExpr: $ => binaryExpr($, {prec: 1, op: $.logicalOrBinaryOp}),
-        // Note: This allows trailing commas everwhere, unlike Google GN
-        _exprList: $ => seq(
-            field('head', $._expr),
-            field('next', optional(seq(',', optional($._exprList)))),
-        ),
+        logical_and_binary_op: $ => '&&',
+        logical_or_binary_op: $ => '||',
+        arithmetic_binary_expr: $ => binary_expr($, {prec: 5, op: $.arithmetic_binary_op}),
+        comparison_binary_expr: $ => binary_expr($, {prec: 4, op: $.comparison_binary_op}),
+        equivalence_binary_expr: $ => binary_expr($, {prec: 3, op: $.equivalence_binary_op}),
+        logical_and_binary_expr: $ => binary_expr($, {prec: 2, op: $.logical_and_binary_op}),
+        logical_or_binary_expr: $ => binary_expr($, {prec: 1, op: $.logical_or_binary_op}),
         _expr: $ => choice(
-            $.unaryExpr,
-            $.arithmeticBinaryExpr,
-            $.comparisonBinaryExpr,
-            $.equivalenceBinaryExpr,
-            $.logicalAndBinaryExpr,
-            $.logicalOrBinaryExpr,
+            $.unary_expr,
+            $.arithmetic_binary_expr,
+            $.comparison_binary_expr,
+            $.equivalence_binary_expr,
+            $.logical_and_binary_expr,
+            $.logical_or_binary_expr,
         ),
 
-        negationUnaryOp: $ => '!',
-        unaryExpr: $ => seq(
-            field('negation', repeat($.negationUnaryOp)),
-            field('expr', $._primaryExpr),
+        // Note: This allows trailing commas everwhere, unlike Google GN
+        _expr_list: $ => seq(
+            $._expr,
+            optional(seq(',', optional($._expr_list))),
         ),
 
-        _primaryExpr: $ => choice(
-            $.identifier,
+        _primary_expr: $ => choice(
             $.integer,
-            $.true,
-            $.false,
+            $.boolean,
+            $.identifier,
             $.string,
             $.call,
-            $.arrayAccess,
-            $.scopeAccess,
+            $.array_access,
+            $.scope_access,
             $.block,
-            $.parenExpr,
-            $.arrayExpr,
+            $.paren_expr,
+            $.array_expr,
         ),
 
-        arrayAccess: $ => seq(
+        array_access: $ => seq(
             field('target', $.identifier),
             '[',
             field('index', $._expr),
             ']',
         ),
-        scopeAccess: $ => seq(
+        scope_access: $ => seq(
             field('target', $.identifier),
             '.',
             field('field', $.identifier),
         ),
-        parenExpr: $ => seq(
-            '(',
-            field('expr', $._expr),
-            ')',
-        ),
-        arrayExpr: $ => seq(
-            '[',
-            field('exprs', optional($._exprList)),
-            ']',
-        ),
+        paren_expr: $ => seq('(', $._expr, ')'),
+        array_expr: $ => seq('[', optional($._expr_list), ']'),
 
         condition: $ => seq(
-            'if', '(', field('cond_expr', $._expr), ')',
+            'if', '(', field('cond', $._expr), ')',
             field('body', $.block),
             optional(seq(
                 'else',
@@ -133,34 +131,29 @@ module.exports = grammar({
                 )
             ))
         ),
-        block: $ => seq(
-            '{',
-            field('statements', repeat($._statement)),
-            '}',
-        ),
-        identifier: $ => /[a-zA-Z_]+[a-zA-Z_0-9]*/,
-        // Note: Maybe should accept "incorrect" integers and then reject them
-        // in the interpreter. "incorrect" being like: -0 or 0001
-        integer: $ => /0|(-?[1-9]+[0-9]*)/,
-        true: $ => 'true',
-        false: $ => 'false',
-        string: $ => seq('"', repeat(choice(
-            $._stringChar,
-            $.stringEscape,
-            $.stringExpansion,
-        )), '"'),
-        _stringChar: $ => /[^\\\$"\n]/, // Any character but: '\', '$', '"', or newline
-        stringEscape: $ => seq('\\', choice('\\', '$', '"')), // Written like this to support syntax highlighting
-        stringExpansion: $ => seq('$', choice(
-            $.identifier,
-            seq('{', choice(
-                $.identifier,
-                $.arrayAccess,
-                $.scopeAccess,
-            ), '}'),
-            $.stringHex,
+        block: $ => seq('{', repeat($._statement), '}'),
+        identifier: $ => IDENTIFIER_REGEX,
+        integer: $ => INTEGER_REGEX,
+        boolean: $ => choice('true', 'false'),
+        string: $ => seq('"', optional($.string_content), '"'),
+        string_content: $ => repeat1(choice(
+            /[^\\\$"\n]+/, // Any character but: '\', '$', '"', or newline
+            $.string_escape,
+            $._string_backslash,
+            $.string_expansion,
         )),
-        stringHex: $ => /0x[0-9a-fA-F][0-9a-fA-F]/,
-        comment: $ => /#.*\n/,
+        string_escape: $ => token.immediate(/\\[\\|\$|"]/),
+        _string_backslash: $ => token.immediate(/\\[^\\|\$|"]/),
+
+        string_expansion: $ => choice(
+            seq('$', alias(token.immediate(IDENTIFIER_REGEX), $.identifier)),
+            seq('$', alias(token.immediate(HEX_REGEX), $.hex)),
+            seq('${', choice(
+                $.identifier,
+                $.array_access,
+                $.scope_access,
+            ), '}'),
+        ),
+        comment: $ => token(prec(-1, /#.*\n/)),
     }
 });
