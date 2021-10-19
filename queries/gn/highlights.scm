@@ -1,7 +1,15 @@
 (identifier) @variable
-(call target: (_) @label)
+;((identifier) @variable (#is? @variable definition)) ; This doesn't work
 
-[ "if" "else" ] @keyword
+; This is really buggy
+; (call target: (identifier) @_target (#eq? @_target "declare_args")
+;     (block (assignment target: (identifier) @parameter)))
+
+(scope_access field: (_) @field)
+
+(call target: (_) @function)
+
+[ "if" "else" ] @conditional
 
 [
     (assign_op)
@@ -23,4 +31,6 @@
 (boolean) @boolean
 
 (comment) @comment
+((comment) @todo (#match? @todo "TODO")) ; This doesn't work
+
 (ERROR) @error
