@@ -1,0 +1,10 @@
+assert(true)
+
+foo = []
+
+if (blah == bar) {
+  foo += ["baz"]
+  test("foobar") {
+    sources = foo
+  }
+}
